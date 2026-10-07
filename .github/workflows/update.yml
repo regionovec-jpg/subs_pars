@@ -1,0 +1,35 @@
+name: Auto Update Subscriptions
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # каждый час (время UTC)
+  workflow_dispatch:       # кнопка "Run workflow" для ручного запуска
+
+permissions:
+  contents: write          # нужно, чтобы бот мог коммитить изменения
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install requests
+
+      - name: Run parser
+        run: python parser.py
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add subs_bl.txt subs_wl.txt
+          git diff --staged --quiet || git commit -m "Auto update subscriptions $(date -u +%F_%H-%M)"
+          git push
