@@ -9,6 +9,7 @@ import ssl
 import os
 import re
 import time
+import subprocess
 import concurrent.futures
 import requests
 from urllib.parse import urlparse, quote
@@ -85,9 +86,13 @@ COUNTRY_NAMES = {
     "ZM":"Zambia","ZW":"Zimbabwe",
 }
 
-# ============ НАСТРОЙКИ ============
-WORKERS = 120
-TIMEOUT = 3
+# ============ XRAY ============
+XRAY_BIN = os.path.expanduser("~/xray/xray")   # в Actions распакуем сюда
+TMP_DIR = "/tmp/xray_tmp"
+SOCKS_BASE_PORT = 20000
+TEST_URL = "https://www.gstatic.com/generate_204"
+PING_TIMEOUT = 5
+XRAY_WORKERS = 20   # для облака хватит 20; выше — риск таймаутов
 
 _FLAGS = {}
 
@@ -100,37 +105,27 @@ def parse_config(line, source_label):
             raw = base64.b64decode(line[8:] + '=' * (-len(line[8:]) % 4)).decode('utf-8')
             cfg = json.loads(raw)
             return {'host': cfg['add'], 'port': int(cfg['port']), 'raw': line,
-                    'tls': cfg.get('tls') in ('tls', 'reality'),
-                    'sni': cfg.get('sni') or cfg.get('host') or cfg['add'],
                     'label': source_label, 'type': 'VMess'}
         elif line.startswith('vless://'):
             p = urlparse(line)
-            q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
-            sec = q.get('security', '')
             return {'host': p.hostname, 'port': p.port or 443, 'raw': line,
-                    'tls': sec in ('tls', 'reality'),
-                    'sni': q.get('sni') or p.hostname,
                     'label': source_label, 'type': 'VLESS'}
         elif line.startswith('trojan://'):
             p = urlparse(line)
-            q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
-            sec = q.get('security', '')
             return {'host': p.hostname, 'port': p.port or 443, 'raw': line,
-                    'tls': sec in ('tls', 'reality'),
-                    'sni': q.get('sni') or p.hostname,
                     'label': source_label, 'type': 'Trojan'}
         elif line.startswith('ss://'):
             p = urlparse(line)
             return {'host': p.hostname, 'port': p.port or 8388, 'raw': line,
-                    'tls': False, 'sni': None, 'label': source_label, 'type': 'Shadowsocks'}
+                    'label': source_label, 'type': 'Shadowsocks'}
         elif line.startswith(('hysteria2://', 'hy2://')):
             p = urlparse(line)
             return {'host': p.hostname, 'port': p.port or 443, 'raw': line,
-                    'tls': True, 'sni': p.hostname, 'label': source_label, 'type': 'Hysteria2'}
+                    'label': source_label, 'type': 'Hysteria2'}
         elif line.startswith('tuic://'):
             p = urlparse(line)
             return {'host': p.hostname, 'port': p.port or 443, 'raw': line,
-                    'tls': True, 'sni': p.hostname, 'label': source_label, 'type': 'TUIC'}
+                    'label': source_label, 'type': 'TUIC'}
     except Exception:
         return None
     return None
@@ -141,31 +136,25 @@ def fetch_sub(url, retries=1):
             req = urllib.request.Request(url, headers={
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
                               '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': '*/*',
-                'Accept-Language': 'ru,en;q=0.9',
-                'Referer': url,
+                'Accept': '*/*', 'Accept-Language': 'ru,en;q=0.9', 'Referer': url,
             })
             resp = urllib.request.urlopen(req, timeout=20)
             data = resp.read()
-
             if not data:
                 return [], "Пустой ответ", "empty"
-
             try:
                 decoded = base64.b64decode(data + b'=' * (-len(data) % 4)).decode('utf-8', errors='ignore')
                 if any(p in decoded for p in ('vless://', 'vmess://', 'trojan://', 'ss://', 'hysteria2://')):
                     return decoded.splitlines(), None, None
             except Exception:
                 pass
-
             text = data.decode('utf-8', errors='ignore')
             if any(p in text for p in ('vless://', 'vmess://', 'trojan://', 'ss://', 'hysteria2://')):
                 return text.splitlines(), None, None
-
             head = text[:500].lower()
             if '<html' in head or '<!doctype' in head or '<body' in head:
                 return [], "HTML-страница вместо подписки", "html"
-            if 'proxies:' in head or 'proxy-groups:' in head or 'rules:' in head:
+            if 'proxies:' in head or 'proxy-groups:' in head:
                 return [], "YAML (Clash) — не поддерживается", "yaml"
             if 'access denied' in head or 'forbidden' in head or '403' in head:
                 return [], "Доступ запрещён (403)", "forbidden"
@@ -173,7 +162,6 @@ def fetch_sub(url, retries=1):
                 return [], "Не найдено (404)", "notfound"
             if len(text.strip()) < 20:
                 return [], f"Слишком короткий ответ ({len(text)} байт)", "short"
-
             b64_blocks = re.findall(r'[A-Za-z0-9+/=]{100,}', text)
             for block in b64_blocks:
                 try:
@@ -182,20 +170,14 @@ def fetch_sub(url, retries=1):
                         return dec.splitlines(), None, None
                 except Exception:
                     continue
-
             return [], f"Не распознан формат ({len(text)} байт)", "unknown"
-
         except urllib.error.HTTPError as e:
             if e.code == 429 and attempt < retries:
-                print(f"   ⏳ 429, повтор через 5с...")
-                time.sleep(5)
-                continue
+                time.sleep(5); continue
             return [], f"HTTP {e.code} {e.reason}", f"http{e.code}"
         except urllib.error.URLError as e:
             if attempt < retries and 'timed out' in str(e).lower():
-                print(f"   ⏳ Timeout, повтор через 3с...")
-                time.sleep(3)
-                continue
+                time.sleep(3); continue
             return [], f"Сеть: {e.reason}", "network"
         except Exception as e:
             return [], f"{type(e).__name__}: {e}", "error"
@@ -223,21 +205,6 @@ def get_flag_and_name(host):
     if not code or len(code) != 2: return "🌐", "Unknown"
     return chr(ord(code[0]) + 127397) + chr(ord(code[1]) + 127397), COUNTRY_NAMES.get(code, code)
 
-def check_tls(cfg):
-    try:
-        start = time.time()
-        if cfg['tls'] and cfg['sni']:
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False; ctx.verify_mode = ssl.CERT_NONE
-            with socket.create_connection((cfg['host'], cfg['port']), timeout=TIMEOUT) as s:
-                with ctx.wrap_socket(s, server_hostname=cfg['sni']):
-                    return cfg, int((time.time() - start) * 1000)
-        else:
-            with socket.create_connection((cfg['host'], cfg['port']), timeout=TIMEOUT):
-                return cfg, int((time.time() - start) * 1000)
-    except Exception:
-        return None, None
-
 def format_line(cfg, ping):
     flag, country = get_flag_and_name(cfg['host'])
     pstr = f"{ping}ms" if ping and ping > 0 else "?ms"
@@ -248,6 +215,124 @@ def format_line(cfg, ping):
         return f"{base}#{quote(new_name)}"
     return f"{raw}#{quote(new_name)}"
 
+# ============ XRAY ============
+def xray_vless(uri):
+    p = urlparse(uri); q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
+    cfg = {"protocol": "vless",
+           "settings": {"vnext": [{"address": p.hostname, "port": p.port or 443,
+                                    "users": [{"id": p.username, "encryption": q.get("encryption", "none"),
+                                               "flow": q.get("flow", "")}]}]},
+           "streamSettings": {"network": q.get("type", "tcp"), "security": q.get("security", "none")}}
+    if q.get("security") == "reality":
+        cfg["streamSettings"]["realitySettings"] = {
+            "serverName": q.get("sni", ""), "publicKey": q.get("pbk", ""),
+            "shortId": q.get("sid", ""), "fingerprint": q.get("fp", "chrome")}
+    if q.get("security") == "tls":
+        cfg["streamSettings"]["tlsSettings"] = {"serverName": q.get("sni", p.hostname),
+                                                 "allowInsecure": q.get("allowInsecure", "0") == "1"}
+    return cfg
+
+def xray_vmess(uri):
+    raw = base64.b64decode(uri[8:] + '=' * (-len(uri[8:]) % 4)).decode()
+    v = json.loads(raw)
+    ss = {"network": v.get("net", "tcp"), "security": v.get("tls", "") or "none"}
+    if v.get("tls") == "tls": ss["tlsSettings"] = {"serverName": v.get("sni") or v.get("host", "")}
+    if v.get("net") == "ws": ss["wsSettings"] = {"path": v.get("path", "/"), "headers": {"Host": v.get("host", "")}}
+    return {"protocol": "vmess",
+            "settings": {"vnext": [{"address": v.get("add"), "port": int(v.get("port", 443)),
+                                     "users": [{"id": v.get("id"), "alterId": int(v.get("aid", 0)),
+                                                "security": v.get("scy", "auto")}]}]},
+            "streamSettings": ss}
+
+def xray_trojan(uri):
+    p = urlparse(uri); q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
+    return {"protocol": "trojan",
+            "settings": {"servers": [{"address": p.hostname, "port": p.port or 443, "password": p.username}]},
+            "streamSettings": {"network": q.get("type", "tcp"), "security": "tls",
+                               "tlsSettings": {"serverName": q.get("sni", p.hostname)}}}
+
+def xray_ss(uri):
+    raw = uri[5:]
+    if "#" in raw: raw = raw.split("#")[0]
+    if "@" in raw:
+        userinfo, hostport = raw.rsplit("@", 1)
+        try: userinfo = base64.b64decode(userinfo + '=' * (-len(userinfo) % 4)).decode()
+        except: pass
+    else:
+        decoded = base64.b64decode(raw + '=' * (-len(raw) % 4)).decode()
+        userinfo, hostport = decoded.rsplit("@", 1)
+    method, password = userinfo.split(":", 1)
+    host, port = hostport.split(":")
+    return {"protocol": "shadowsocks",
+            "settings": {"servers": [{"address": host, "port": int(port.split("/")[0]),
+                                       "method": method, "password": password}]}}
+
+def xray_hysteria2(uri):
+    p = urlparse(uri); q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
+    return {"protocol": "hysteria2",
+            "settings": {"servers": [{"address": p.hostname, "port": p.port or 443, "password": p.username}]},
+            "streamSettings": {"security": "tls", "tlsSettings": {"serverName": q.get("sni", p.hostname)}}}
+
+def xray_config(uri):
+    uri = uri.strip()
+    try:
+        if uri.startswith("vless://"): return xray_vless(uri)
+        if uri.startswith("vmess://"): return xray_vmess(uri)
+        if uri.startswith("trojan://"): return xray_trojan(uri)
+        if uri.startswith("ss://"): return xray_ss(uri)
+        if uri.startswith(("hysteria2://", "hy2://")): return xray_hysteria2(uri)
+    except Exception:
+        return None
+    return None
+
+def check_via_xray(args):
+    idx, cfg = args
+    outbound = xray_config(cfg['raw'])
+    if not outbound:
+        return None, None
+    port = SOCKS_BASE_PORT + (idx % 500)
+    cfg_path = os.path.join(TMP_DIR, f"c{idx}.json")
+    full = {"log": {"loglevel": "none"},
+            "inbounds": [{"listen": "127.0.0.1", "port": port, "protocol": "socks",
+                          "settings": {"auth": "noauth", "udp": False}}],
+            "outbounds": [outbound]}
+    try:
+        with open(cfg_path, "w") as f: json.dump(full, f)
+    except Exception:
+        return None, None
+    proc = subprocess.Popen([XRAY_BIN, "-c", cfg_path],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    ready = False
+    for _ in range(30):
+        time.sleep(0.1)
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.3):
+                ready = True; break
+        except Exception:
+            continue
+    if not ready:
+        proc.kill()
+        try: os.remove(cfg_path)
+        except: pass
+        return None, None
+    try:
+        start = time.time()
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({
+            "http": f"socks5://127.0.0.1:{port}",
+            "https": f"socks5://127.0.0.1:{port}"}))
+        req = urllib.request.Request(TEST_URL, headers={"User-Agent": "Mozilla/5.0"})
+        resp = opener.open(req, timeout=PING_TIMEOUT)
+        ping = int((time.time() - start) * 1000)
+        proc.kill()
+        try: os.remove(cfg_path)
+        except: pass
+        return (cfg, ping) if resp.status == 204 else (None, None)
+    except Exception:
+        proc.kill()
+        try: os.remove(cfg_path)
+        except: pass
+        return None, None
+
 # ============ ОСНОВНАЯ ЛОГИКА ============
 def run_subscription(sources, remote_name, label):
     global _FLAGS
@@ -255,56 +340,51 @@ def run_subscription(sources, remote_name, label):
     t0 = time.time()
 
     print(f"\n═══ {label} → {remote_name} ═══")
-    print(f"⚙️  Потоки: {WORKERS} | Таймаут: {TIMEOUT}s")
+    print(f"⚙️  Xray-потоков: {XRAY_WORKERS} | Пинг-таймаут: {PING_TIMEOUT}s")
 
-    print("\n🌐 Загрузка источников...")
     all_configs = []
     type_counter = Counter()
-    problems = []
-
     for src_label, url in sources:
         lines, error, reason = fetch_sub(url, retries=1)
-        configs_from_src = []
+        got = 0
         for line in lines:
             cfg = parse_config(line, src_label)
             if cfg:
                 all_configs.append(cfg)
-                configs_from_src.append(cfg)
                 type_counter[cfg['type']] += 1
-
+                got += 1
         if error:
             print(f"   ❌ [{src_label}] {error}")
-            problems.append((src_label, error))
-        elif len(configs_from_src) == 0 and reason:
-            print(f"   ⚠️  [{src_label}] строк {len(lines)} — {reason}")
-            problems.append((src_label, reason))
+        elif got == 0 and reason:
+            print(f"   ⚠️  [{src_label}] {reason}")
         else:
-            print(f"   ✅ [{src_label}] {len(lines)} строк → {len(configs_from_src)} конфигов")
+            print(f"   ✅ [{src_label}] {len(lines)} строк → {got} конфигов")
 
-    if problems:
-        print("\n⚠️  ПРОБЛЕМНЫЕ ИСТОЧНИКИ:")
-        for lbl, reason in problems:
-            print(f"   • {lbl:<14} → {reason}")
-
-    print(f"\n✅ Всего конфигов к проверке: {len(all_configs)}")
+    print(f"\n✅ Всего конфигов: {len(all_configs)}")
     if not all_configs:
         print("⚠️ Нечего проверять")
         return
 
     load_flags_batch(list({c['host'] for c in all_configs}))
 
-    print(f"\n🚀 TLS-проверка в {WORKERS} потоков...")
+    print(f"\n🔥 Xray-проверка (GET {TEST_URL}) в {XRAY_WORKERS} потоков...")
+    print("   ⏳ Это медленно — наберись терпения, может занять 15-40 минут...")
+
     working = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as ex:
-        for i, (cfg, ping) in enumerate(ex.map(check_tls, all_configs)):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=XRAY_WORKERS) as ex:
+        tasks = list(enumerate(all_configs))
+        for i, (cfg, ping) in enumerate(ex.map(check_via_xray, tasks)):
             if cfg and ping is not None:
                 working.append((cfg, ping))
-            if (i + 1) % 200 == 0:
-                print(f"   {i+1}/{len(all_configs)} | рабочих: {len(working)}")
+            if (i + 1) % 20 == 0:
+                elapsed = time.time() - t0
+                speed = (i + 1) / elapsed if elapsed > 0 else 0
+                eta = (len(all_configs) - i - 1) / speed if speed > 0 else 0
+                print(f"   {i+1}/{len(all_configs)} | рабочих: {len(working)} | {speed:.1f}/с | ETA {eta:.0f}с")
 
-    print(f"\n🔥 Рабочих: {len(working)}")
+    print(f"\n🔥 Рабочих через прокси: {len(working)}")
     if not working:
-        print("⚠️ Ничего не работает")
+        print("⚠️ Ничего не прошло проверку")
         return
 
     working.sort(key=lambda x: x[1])
@@ -313,11 +393,11 @@ def run_subscription(sources, remote_name, label):
     with open(remote_name, "w", encoding="utf-8") as f:
         f.write("\n".join(output))
     print(f"💾 {remote_name}: {len(output)} серверов")
-
     print(f"⏱️  Всего: {time.time() - t0:.1f}с")
 
 if __name__ == "__main__":
-    print("🚀 Запуск парсера подписок...")
+    os.makedirs(TMP_DIR, exist_ok=True)
+    print("🚀 Запуск парсера с Xray-проверкой...")
     run_subscription(BLACK_SOURCES, "subs_bl.txt", "⚫ ЧЁРНАЯ")
     run_subscription(WHITE_SOURCES, "subs_wl.txt", "⚪ БЕЛАЯ")
     print("\n✅ Готово!")
