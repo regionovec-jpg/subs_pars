@@ -92,7 +92,7 @@ TMP_DIR = "/tmp/xray_tmp"
 SOCKS_BASE_PORT = 20000
 TEST_URL = "https://www.gstatic.com/generate_204"
 PING_TIMEOUT = 5
-XRAY_WORKERS = 20   # для облака хватит 20; выше — риск таймаутов
+XRAY_WORKERS = 20   
 
 _FLAGS = {}
 
