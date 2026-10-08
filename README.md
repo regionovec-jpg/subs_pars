@@ -1,3 +1,5 @@
+![Auto Update](https://github.com/regionovec-jpg/subs_pars/actions/workflows/update.yml/badge.svg)
+
 # subs_pars
 
 Парсер подписок для v2rayNG / Hiddify / NekoBox 
