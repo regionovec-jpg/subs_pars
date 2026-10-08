@@ -32,9 +32,11 @@ BLACK_SOURCES = [
     ("WarpGen",     "https://warp-gen.cyb-portal.org/CP-039"),
     ("BUNKER",      "https://gitverse.ru/api/repos/KOT_ANTIDOT/BUNKER/raw/branch/master/BUNKER_BLACK700.txt"),
     ("ImSketch",    "https://raw.githubusercontent.com/ImSketch1337/vless-/refs/heads/main/BLWLservers.txt"),
+("LSO-WIFI",    "https://raw.githubusercontent.com/LSO-LinSpisokObhod/LSO-LinSpisokObhod.github.io/refs/heads/main/sub/WIFI.txt"),
 ]
 
 WHITE_SOURCES = [
+("LSO-LTE",     "https://raw.githubusercontent.com/LSO-LinSpisokObhod/LSO-LinSpisokObhod.github.io/refs/heads/main/sub/LTE.txt"),
     ("bikinitw22",  "https://gitverse.ru/api/repos/bikinitw22/apelsintel/raw/branch/main/alive_bs.txt"),
     ("Pizduk",      "https://gitverse.ru/api/repos/Pizduk/PizdukVPN/raw/branch/master/WlSubPiz.txt"),
     ("mos.ru",      "https://hub.mos.ru/kfwl/auto/raw/main/wl"),
