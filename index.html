@@ -5,196 +5,117 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cooler Subs</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: #0d1117;
     color: #e6edf3;
-    min-height: 100vh;
+    max-width: 640px;
+    margin: 0 auto;
     padding: 40px 20px;
+    line-height: 1.5;
   }
-  .container { max-width: 720px; margin: 0 auto; }
   h1 {
-    font-size: 32px;
-    margin-bottom: 8px;
-    background: linear-gradient(90deg, #58a6ff, #a371f7);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-size: 24px;
+    margin-bottom: 24px;
+    color: #58a6ff;
   }
-  .subtitle {
-    color: #8b949e;
-    margin-bottom: 40px;
-    font-size: 14px;
-  }
-  .card {
+  .row {
     background: #161b22;
     border: 1px solid #30363d;
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 16px;
-    transition: border-color 0.2s;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
   }
-  .card:hover { border-color: #58a6ff; }
-  .card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 12px;
-  }
-  .card-title {
-    font-size: 18px;
+  .row-title {
+    font-size: 14px;
     font-weight: 600;
+    margin-bottom: 8px;
   }
-  .badge {
-    font-size: 11px;
-    padding: 3px 8px;
-    border-radius: 6px;
-    background: #21262d;
-    color: #8b949e;
-    font-weight: 500;
-  }
-  .badge.bl { background: #3d1a1a; color: #ff7b72; }
-  .badge.wl { background: #1a3d2a; color: #7ee787; }
-  .link-row {
+  .row-line {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     align-items: center;
   }
-  .link-input {
+  .url {
     flex: 1;
     background: #0d1117;
     border: 1px solid #30363d;
-    border-radius: 8px;
-    padding: 10px 12px;
+    border-radius: 6px;
+    padding: 8px 10px;
     color: #8b949e;
-    font-family: "SF Mono", Consolas, monospace;
-    font-size: 12px;
+    font-family: monospace;
+    font-size: 11px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .btn {
+  button {
     background: #238636;
     color: white;
     border: none;
-    padding: 10px 16px;
-    border-radius: 8px;
-    font-size: 13px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 12px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.2s;
-    white-space: nowrap;
   }
-  .btn:hover { background: #2ea043; }
-  .btn:active { background: #238636; }
-  .btn.copied { background: #1f6feb; }
-  .footer {
-    text-align: center;
-    color: #484f58;
-    font-size: 12px;
-    margin-top: 40px;
-  }
-  .footer a { color: #58a6ff; text-decoration: none; }
+  button:hover { background: #2ea043; }
+  button.copied { background: #1f6feb; }
 </style>
 </head>
 <body>
-<div class="container">
   <h1>Cooler Subs</h1>
-  <p class="subtitle">Автоматически обновляемые подписки с проверкой через Xray</p>
 
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title">⚫ Чёрный список</span>
-      <span class="badge bl">BLACK</span>
-    </div>
-    <div class="link-row">
-      <input class="link-input" readonly
+  <div class="row">
+    <div class="row-title">⚫ Чёрный список</div>
+    <div class="row-line">
+      <input class="url" readonly
         value="https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_bl.txt">
-      <button class="btn" onclick="copy(this)">Копировать</button>
+      <button onclick="copy(this)">Копировать</button>
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title">⚪ Белый список</span>
-      <span class="badge wl">WHITE</span>
-    </div>
-    <div class="link-row">
-      <input class="link-input" readonly
+  <div class="row">
+    <div class="row-title">⚪ Белый список</div>
+    <div class="row-line">
+      <input class="url" readonly
         value="https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_wl.txt">
-      <button class="btn" onclick="copy(this)">Копировать</button>
+      <button onclick="copy(this)">Копировать</button>
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title">⚫ Чёрный без RU</span>
-      <span class="badge bl">BLACK</span>
-    </div>
-    <div class="link-row">
-      <input class="link-input" readonly
-        value="https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_bl_no_ru.txt">
-      <button class="btn" onclick="copy(this)">Копировать</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title">⚪ Белый без RU</span>
-      <span class="badge wl">WHITE</span>
-    </div>
-    <div class="link-row">
-      <input class="link-input" readonly
-        value="https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_wl_no_ru.txt">
-      <button class="btn" onclick="copy(this)">Копировать</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title">⚫ YAML для Clash</span>
-      <span class="badge bl">BLACK</span>
-    </div>
-    <div class="link-row">
-      <input class="link-input" readonly
+  <div class="row">
+    <div class="row-title">⚫ Clash YAML (чёрный)</div>
+    <div class="row-line">
+      <input class="url" readonly
         value="https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_bl.yaml">
-      <button class="btn" onclick="copy(this)">Копировать</button>
+      <button onclick="copy(this)">Копировать</button>
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-header">
-      <span class="card-title">⚪ YAML для Clash</span>
-      <span class="badge wl">WHITE</span>
-    </div>
-    <div class="link-row">
-      <input class="link-input" readonly
+  <div class="row">
+    <div class="row-title">⚪ Clash YAML (белый)</div>
+    <div class="row-line">
+      <input class="url" readonly
         value="https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_wl.yaml">
-      <button class="btn" onclick="copy(this)">Копировать</button>
+      <button onclick="copy(this)">Копировать</button>
     </div>
   </div>
 
-  <p class="footer">
-    Обновляется каждые 6 часов через GitHub Actions · 
-    <a href="https://github.com/regionovec-jpg/subs_pars">Исходники</a>
-  </p>
-</div>
-
-<script>
-function copy(btn) {
-  const input = btn.parentElement.querySelector('.link-input');
-  input.select();
-  input.setSelectionRange(0, 99999);
-  navigator.clipboard.writeText(input.value).then(() => {
-    btn.textContent = '✓ Скопировано';
-    btn.classList.add('copied');
-    setTimeout(() => {
-      btn.textContent = 'Копировать';
-      btn.classList.remove('copied');
-    }, 1500);
-  });
-}
-</script>
+  <script>
+    function copy(btn) {
+      const input = btn.parentElement.querySelector('.url');
+      input.select();
+      input.setSelectionRange(0, 99999);
+      navigator.clipboard.writeText(input.value).then(() => {
+        btn.textContent = '✓';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'Копировать';
+          btn.classList.remove('copied');
+        }, 1200);
+      });
+    }
+  </script>
 </body>
-    </html>
+</html>
