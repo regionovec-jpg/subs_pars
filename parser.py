@@ -132,6 +132,17 @@ def parse_config(line, source_label):
     return None
 
 
+def dedup_configs(configs):
+    seen = set()
+    unique = []
+    for cfg in configs:
+        key = cfg['raw'].split('#')[0]
+        if key not in seen:
+            seen.add(key)
+            unique.append(cfg)
+    return unique
+
+
 def fetch_sub(url, retries=1):
     for attempt in range(retries + 1):
         try:
@@ -652,6 +663,12 @@ def run_subscription(sources, remote_name, label):
     if not all_configs:
         print("⚠️ Нечего проверять")
         return
+
+    before = len(all_configs)
+    all_configs = dedup_configs(all_configs)
+    after = len(all_configs)
+    if before > after:
+        print(f"♻️  Дедупликация: {before} → {after} (убрано {before - after})")
 
     load_flags_batch(list({c['host'] for c in all_configs}))
 
