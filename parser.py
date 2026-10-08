@@ -12,10 +12,10 @@ import time
 import subprocess
 import concurrent.futures
 import requests
+import yaml
 from urllib.parse import urlparse, quote
 from collections import Counter
 
-# ============ ИСТОЧНИКИ ============
 BLACK_SOURCES = [
     ("Gidroksi",    "https://gidroksi.fun/black-list"),
     ("Aetris",      "https://gitverse.ru/api/repos/flaafix/AetrisVPN_Black_list/raw/branch/master/configs.txt"),
@@ -32,11 +32,10 @@ BLACK_SOURCES = [
     ("WarpGen",     "https://warp-gen.cyb-portal.org/CP-039"),
     ("BUNKER",      "https://gitverse.ru/api/repos/KOT_ANTIDOT/BUNKER/raw/branch/master/BUNKER_BLACK700.txt"),
     ("ImSketch",    "https://raw.githubusercontent.com/ImSketch1337/vless-/refs/heads/main/BLWLservers.txt"),
-("LSO-WIFI",    "https://raw.githubusercontent.com/LSO-LinSpisokObhod/LSO-LinSpisokObhod.github.io/refs/heads/main/sub/WIFI.txt"),
+    ("LSO-WIFI",    "https://raw.githubusercontent.com/LSO-LinSpisokObhod/LSO-LinSpisokObhod.github.io/refs/heads/main/sub/WIFI.txt"),
 ]
 
 WHITE_SOURCES = [
-("LSO-LTE",     "https://raw.githubusercontent.com/LSO-LinSpisokObhod/LSO-LinSpisokObhod.github.io/refs/heads/main/sub/LTE.txt"),
     ("bikinitw22",  "https://gitverse.ru/api/repos/bikinitw22/apelsintel/raw/branch/main/alive_bs.txt"),
     ("Pizduk",      "https://gitverse.ru/api/repos/Pizduk/PizdukVPN/raw/branch/master/WlSubPiz.txt"),
     ("mos.ru",      "https://hub.mos.ru/kfwl/auto/raw/main/wl"),
@@ -45,9 +44,9 @@ WHITE_SOURCES = [
     ("etoneya wl",  "https://etoskam.ru/whitelist"),
     ("ring-team",   "https://enc.ring-team.casa/sub/kuajs27ilzcz"),
     ("ImSketch",    "https://raw.githubusercontent.com/ImSketch1337/vless-/refs/heads/main/BLWLservers.txt"),
+    ("LSO-LTE",     "https://raw.githubusercontent.com/LSO-LinSpisokObhod/LSO-LinSpisokObhod.github.io/refs/heads/main/sub/LTE.txt"),
 ]
 
-# ============ СЛОВАРЬ СТРАН ============
 COUNTRY_NAMES = {
     "AD":"Andorra","AE":"UAE","AF":"Afghanistan","AG":"Antigua","AL":"Albania","AM":"Armenia",
     "AO":"Angola","AR":"Argentina","AT":"Austria","AU":"Australia","AZ":"Azerbaijan",
@@ -88,20 +87,20 @@ COUNTRY_NAMES = {
     "ZM":"Zambia","ZW":"Zimbabwe",
 }
 
-# ============ XRAY ============
-XRAY_BIN = os.path.expanduser("~/xray/xray")   # в Actions распакуем сюда
+XRAY_BIN = os.path.expanduser("~/xray/xray")
 TMP_DIR = "/tmp/xray_tmp"
 SOCKS_BASE_PORT = 20000
 TEST_URL = "https://www.gstatic.com/generate_204"
 PING_TIMEOUT = 5
-XRAY_WORKERS = 20   
+XRAY_WORKERS = 20
 
 _FLAGS = {}
 
-# ============ ПАРСИНГ ============
+
 def parse_config(line, source_label):
     line = line.strip()
-    if not line or line.startswith('#'): return None
+    if not line or line.startswith('#'):
+        return None
     try:
         if line.startswith('vmess://'):
             raw = base64.b64decode(line[8:] + '=' * (-len(line[8:]) % 4)).decode('utf-8')
@@ -131,6 +130,7 @@ def parse_config(line, source_label):
     except Exception:
         return None
     return None
+
 
 def fetch_sub(url, retries=1):
     for attempt in range(retries + 1):
@@ -175,19 +175,23 @@ def fetch_sub(url, retries=1):
             return [], f"Не распознан формат ({len(text)} байт)", "unknown"
         except urllib.error.HTTPError as e:
             if e.code == 429 and attempt < retries:
-                time.sleep(5); continue
+                time.sleep(5)
+                continue
             return [], f"HTTP {e.code} {e.reason}", f"http{e.code}"
         except urllib.error.URLError as e:
             if attempt < retries and 'timed out' in str(e).lower():
-                time.sleep(3); continue
+                time.sleep(3)
+                continue
             return [], f"Сеть: {e.reason}", "network"
         except Exception as e:
             return [], f"{type(e).__name__}: {e}", "error"
     return [], "Все попытки провалились", "failed"
 
+
 def load_flags_batch(hosts):
     ips = [h for h in hosts if h and h.count('.') == 3 and all(p.isdigit() for p in h.split('.'))]
-    if not ips: return
+    if not ips:
+        return
     print(f"\n🌍 Определение стран для {len(ips)} IP...")
     for i in range(0, len(ips), 100):
         chunk = ips[i:i+100]
@@ -202,10 +206,13 @@ def load_flags_batch(hosts):
             print(f"   ⚠️ Батч {i//100}: {e}")
         time.sleep(1.5)
 
+
 def get_flag_and_name(host):
     code = _FLAGS.get(host, '')
-    if not code or len(code) != 2: return "🌐", "Unknown"
+    if not code or len(code) != 2:
+        return "🌐", "Unknown"
     return chr(ord(code[0]) + 127397) + chr(ord(code[1]) + 127397), COUNTRY_NAMES.get(code, code)
+
 
 def format_line(cfg, ping):
     flag, country = get_flag_and_name(cfg['host'])
@@ -217,9 +224,128 @@ def format_line(cfg, ping):
         return f"{base}#{quote(new_name)}"
     return f"{raw}#{quote(new_name)}"
 
-# ============ XRAY ============
+
+def to_clash_proxy(cfg, flag, country, ping):
+    uri = cfg['raw'].strip()
+    name = f"cool [{cfg['label']}] {flag} {country} |{ping}ms|"
+    try:
+        if uri.startswith('vless://'):
+            p = urlparse(uri)
+            q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
+            proxy = {
+                "name": name, "type": "vless", "server": p.hostname,
+                "port": p.port or 443, "uuid": p.username, "udp": True,
+                "tls": q.get("security") in ("tls", "reality"),
+                "network": q.get("type", "tcp"),
+                "skip-cert-verify": q.get("allowInsecure", "0") == "1",
+            }
+            if q.get("flow"):
+                proxy["flow"] = q["flow"]
+            if q.get("security") == "reality":
+                proxy["reality-opts"] = {"public-key": q.get("pbk", ""), "short-id": q.get("sid", "")}
+                proxy["servername"] = q.get("sni", "")
+                proxy["client-fingerprint"] = q.get("fp", "chrome")
+            elif q.get("security") == "tls":
+                proxy["servername"] = q.get("sni", p.hostname)
+            if q.get("type") == "ws":
+                proxy["ws-opts"] = {"path": q.get("path", "/"), "headers": {"Host": q.get("host", "")}}
+            elif q.get("type") == "grpc":
+                proxy["grpc-opts"] = {"grpc-service-name": q.get("serviceName", "")}
+            return proxy
+
+        elif uri.startswith('vmess://'):
+            raw = base64.b64decode(uri[8:] + '=' * (-len(uri[8:]) % 4)).decode('utf-8')
+            v = json.loads(raw)
+            proxy = {
+                "name": name, "type": "vmess", "server": v.get("add"),
+                "port": int(v.get("port", 443)), "uuid": v.get("id"),
+                "alterId": int(v.get("aid", 0)), "cipher": v.get("scy", "auto"),
+                "udp": True, "tls": v.get("tls") == "tls",
+                "network": v.get("net", "tcp"),
+            }
+            if v.get("sni"):
+                proxy["servername"] = v["sni"]
+            if v.get("net") == "ws":
+                proxy["ws-opts"] = {"path": v.get("path", "/"), "headers": {"Host": v.get("host", "")}}
+            return proxy
+
+        elif uri.startswith('trojan://'):
+            p = urlparse(uri)
+            q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
+            return {
+                "name": name, "type": "trojan", "server": p.hostname,
+                "port": p.port or 443, "password": p.username,
+                "sni": q.get("sni", p.hostname), "udp": True,
+                "skip-cert-verify": False,
+            }
+
+        elif uri.startswith('ss://'):
+            raw = uri[5:]
+            if "#" in raw:
+                raw = raw.split("#")[0]
+            if "@" in raw:
+                userinfo, hostport = raw.rsplit("@", 1)
+                try:
+                    userinfo = base64.b64decode(userinfo + '=' * (-len(userinfo) % 4)).decode()
+                except Exception:
+                    pass
+            else:
+                decoded = base64.b64decode(raw + '=' * (-len(raw) % 4)).decode()
+                userinfo, hostport = decoded.rsplit("@", 1)
+            method, password = userinfo.split(":", 1)
+            host, port = hostport.split(":")
+            return {
+                "name": name, "type": "ss", "server": host,
+                "port": int(port.split("/")[0]), "cipher": method, "password": password, "udp": True,
+            }
+
+        elif uri.startswith(('hysteria2://', 'hy2://')):
+            p = urlparse(uri)
+            q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
+            return {
+                "name": name, "type": "hysteria2", "server": p.hostname,
+                "port": p.port or 443, "password": p.username,
+                "sni": q.get("sni", p.hostname),
+                "skip-cert-verify": q.get("insecure", "0") == "1",
+            }
+    except Exception:
+        return None
+    return None
+
+
+def build_clash_yaml(working_list, out_path):
+    proxies = []
+    skipped = 0
+    for cfg, ping in working_list:
+        flag, country = get_flag_and_name(cfg['host'])
+        p = to_clash_proxy(cfg, flag, country, ping)
+        if p:
+            proxies.append(p)
+        else:
+            skipped += 1
+    if not proxies:
+        print(f"⚠️ {out_path}: нет прокси")
+        return
+    data = {
+        "proxies": proxies,
+        "proxy-groups": [{
+            "name": "Auto",
+            "type": "url-test",
+            "url": "http://www.gstatic.com/generate_204",
+            "interval": 300,
+            "tolerance": 50,
+            "proxies": [p["name"] for p in proxies],
+        }],
+        "rules": ["MATCH,Auto"],
+    }
+    with open(out_path, "w", encoding="utf-8") as f:
+        yaml.dump(data, f, allow_unicode=True, sort_keys=False, width=1000)
+    print(f"💾 {out_path}: {len(proxies)} прокси (пропущено {skipped})")
+
+
 def xray_vless(uri):
-    p = urlparse(uri); q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
+    p = urlparse(uri)
+    q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
     cfg = {"protocol": "vless",
            "settings": {"vnext": [{"address": p.hostname, "port": p.port or 443,
                                     "users": [{"id": p.username, "encryption": q.get("encryption", "none"),
@@ -234,32 +360,41 @@ def xray_vless(uri):
                                                  "allowInsecure": q.get("allowInsecure", "0") == "1"}
     return cfg
 
+
 def xray_vmess(uri):
     raw = base64.b64decode(uri[8:] + '=' * (-len(uri[8:]) % 4)).decode()
     v = json.loads(raw)
     ss = {"network": v.get("net", "tcp"), "security": v.get("tls", "") or "none"}
-    if v.get("tls") == "tls": ss["tlsSettings"] = {"serverName": v.get("sni") or v.get("host", "")}
-    if v.get("net") == "ws": ss["wsSettings"] = {"path": v.get("path", "/"), "headers": {"Host": v.get("host", "")}}
+    if v.get("tls") == "tls":
+        ss["tlsSettings"] = {"serverName": v.get("sni") or v.get("host", "")}
+    if v.get("net") == "ws":
+        ss["wsSettings"] = {"path": v.get("path", "/"), "headers": {"Host": v.get("host", "")}}
     return {"protocol": "vmess",
             "settings": {"vnext": [{"address": v.get("add"), "port": int(v.get("port", 443)),
                                      "users": [{"id": v.get("id"), "alterId": int(v.get("aid", 0)),
                                                 "security": v.get("scy", "auto")}]}]},
             "streamSettings": ss}
 
+
 def xray_trojan(uri):
-    p = urlparse(uri); q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
+    p = urlparse(uri)
+    q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
     return {"protocol": "trojan",
             "settings": {"servers": [{"address": p.hostname, "port": p.port or 443, "password": p.username}]},
             "streamSettings": {"network": q.get("type", "tcp"), "security": "tls",
                                "tlsSettings": {"serverName": q.get("sni", p.hostname)}}}
 
+
 def xray_ss(uri):
     raw = uri[5:]
-    if "#" in raw: raw = raw.split("#")[0]
+    if "#" in raw:
+        raw = raw.split("#")[0]
     if "@" in raw:
         userinfo, hostport = raw.rsplit("@", 1)
-        try: userinfo = base64.b64decode(userinfo + '=' * (-len(userinfo) % 4)).decode()
-        except: pass
+        try:
+            userinfo = base64.b64decode(userinfo + '=' * (-len(userinfo) % 4)).decode()
+        except Exception:
+            pass
     else:
         decoded = base64.b64decode(raw + '=' * (-len(raw) % 4)).decode()
         userinfo, hostport = decoded.rsplit("@", 1)
@@ -269,23 +404,32 @@ def xray_ss(uri):
             "settings": {"servers": [{"address": host, "port": int(port.split("/")[0]),
                                        "method": method, "password": password}]}}
 
+
 def xray_hysteria2(uri):
-    p = urlparse(uri); q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
+    p = urlparse(uri)
+    q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
     return {"protocol": "hysteria2",
             "settings": {"servers": [{"address": p.hostname, "port": p.port or 443, "password": p.username}]},
             "streamSettings": {"security": "tls", "tlsSettings": {"serverName": q.get("sni", p.hostname)}}}
 
+
 def xray_config(uri):
     uri = uri.strip()
     try:
-        if uri.startswith("vless://"): return xray_vless(uri)
-        if uri.startswith("vmess://"): return xray_vmess(uri)
-        if uri.startswith("trojan://"): return xray_trojan(uri)
-        if uri.startswith("ss://"): return xray_ss(uri)
-        if uri.startswith(("hysteria2://", "hy2://")): return xray_hysteria2(uri)
+        if uri.startswith("vless://"):
+            return xray_vless(uri)
+        if uri.startswith("vmess://"):
+            return xray_vmess(uri)
+        if uri.startswith("trojan://"):
+            return xray_trojan(uri)
+        if uri.startswith("ss://"):
+            return xray_ss(uri)
+        if uri.startswith(("hysteria2://", "hy2://")):
+            return xray_hysteria2(uri)
     except Exception:
         return None
     return None
+
 
 def check_via_xray(args):
     idx, cfg = args
@@ -299,7 +443,8 @@ def check_via_xray(args):
                           "settings": {"auth": "noauth", "udp": False}}],
             "outbounds": [outbound]}
     try:
-        with open(cfg_path, "w") as f: json.dump(full, f)
+        with open(cfg_path, "w") as f:
+            json.dump(full, f)
     except Exception:
         return None, None
     proc = subprocess.Popen([XRAY_BIN, "-c", cfg_path],
@@ -309,13 +454,16 @@ def check_via_xray(args):
         time.sleep(0.1)
         try:
             with socket.create_connection(("127.0.0.1", port), timeout=0.3):
-                ready = True; break
+                ready = True
+                break
         except Exception:
             continue
     if not ready:
         proc.kill()
-        try: os.remove(cfg_path)
-        except: pass
+        try:
+            os.remove(cfg_path)
+        except Exception:
+            pass
         return None, None
     try:
         start = time.time()
@@ -326,16 +474,20 @@ def check_via_xray(args):
         resp = opener.open(req, timeout=PING_TIMEOUT)
         ping = int((time.time() - start) * 1000)
         proc.kill()
-        try: os.remove(cfg_path)
-        except: pass
+        try:
+            os.remove(cfg_path)
+        except Exception:
+            pass
         return (cfg, ping) if resp.status == 204 else (None, None)
     except Exception:
         proc.kill()
-        try: os.remove(cfg_path)
-        except: pass
+        try:
+            os.remove(cfg_path)
+        except Exception:
+            pass
         return None, None
 
-# ============ ОСНОВНАЯ ЛОГИКА ============
+
 def run_subscription(sources, remote_name, label):
     global _FLAGS
     _FLAGS = {}
@@ -370,7 +522,7 @@ def run_subscription(sources, remote_name, label):
     load_flags_batch(list({c['host'] for c in all_configs}))
 
     print(f"\n🔥 Xray-проверка (GET {TEST_URL}) в {XRAY_WORKERS} потоков...")
-    print("   ⏳ Это медленно — наберись терпения, может занять 15-40 минут...")
+    print("   ⏳ Это медленно — может занять 15-40 минут...")
 
     working = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=XRAY_WORKERS) as ex:
@@ -394,8 +546,13 @@ def run_subscription(sources, remote_name, label):
 
     with open(remote_name, "w", encoding="utf-8") as f:
         f.write("\n".join(output))
-    print(f"💾 {remote_name}: {len(output)} серверов")
+    print(f"💾 {remote_name}: {len(output)} серверов (TXT)")
+
+    yaml_name = remote_name.replace(".txt", ".yaml")
+    build_clash_yaml(working, yaml_name)
+
     print(f"⏱️  Всего: {time.time() - t0:.1f}с")
+
 
 if __name__ == "__main__":
     os.makedirs(TMP_DIR, exist_ok=True)
