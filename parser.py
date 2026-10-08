@@ -316,13 +316,20 @@ def to_clash_proxy(cfg, flag, country, ping):
 def build_clash_yaml(working_list, out_path):
     proxies = []
     skipped = 0
+    seen_names = {}
     for cfg, ping in working_list:
         flag, country = get_flag_and_name(cfg['host'])
         p = to_clash_proxy(cfg, flag, country, ping)
-        if p:
-            proxies.append(p)
-        else:
+        if not p:
             skipped += 1
+            continue
+        base_name = p["name"]
+        if base_name in seen_names:
+            seen_names[base_name] += 1
+            p["name"] = f"{base_name} #{seen_names[base_name]}"
+        else:
+            seen_names[base_name] = 1
+        proxies.append(p)
     if not proxies:
         print(f"⚠️ {out_path}: нет прокси")
         return
@@ -340,7 +347,8 @@ def build_clash_yaml(working_list, out_path):
     }
     with open(out_path, "w", encoding="utf-8") as f:
         yaml.dump(data, f, allow_unicode=True, sort_keys=False, width=1000)
-    print(f"💾 {out_path}: {len(proxies)} прокси (пропущено {skipped})")
+    dupes = sum(v - 1 for v in seen_names.values() if v > 1)
+    print(f"💾 {out_path}: {len(proxies)} прокси (пропущено {skipped}, дубликатов {dupes})")
 
 
 def xray_vless(uri):
