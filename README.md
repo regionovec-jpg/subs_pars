@@ -5,5 +5,6 @@
 
 ## Ссылки для клиента
 
-Чёрная:  https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_bl.txt
-Белая:   https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_wl.txt
+Чёрные:  https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_bl.txt
+
+Белые:   https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_wl.txt
