@@ -317,6 +317,245 @@ def build_clash_yaml(working_list, out_path):
     proxies = []
     skipped = 0
     seen_names = {}
+    country_map = {}
+    name_to_country = {}
+
+    for cfg, ping in working_list:
+        flag, country = get_flag_and_name(cfg['host'])
+        p = to_clash_proxy(cfg, flag, country, ping)
+        if not p:
+            skipped += 1
+            continue
+        base_name = p["name"]
+        if base_name in seen_names:
+            seen_names[base_name] += 1
+            p["name"] = f"{base_name} #{seen_names[base_name]}"
+        else:
+            seen_names[base_name] = 1
+        proxies.append(p)
+        name_to_country[p["name"]] = country
+        country_map.setdefault(country, []).append(p["name"])
+
+    if not proxies:
+        print(f"⚠️ {out_path}: нет прокси")
+        return
+
+    all_names = [p["name"] for p in proxies]
+
+    groups = [
+        {"name": "Обычный", "type": "select", "proxies": ["Авто"] + all_names},
+        {"name": "Авто", "type": "url-test", "url": "http://www.gstatic.com/generate_204",
+         "interval": 300, "tolerance": 50, "proxies": all_names},
+    ]
+
+    code_by_name = {v: k for k, v in COUNTRY_NAMES.items()}
+
+    for country in sorted(country_map.keys()):
+        names = country_map[country]
+        if country == "Unknown":
+            group_name = "🌐 Unknown"
+        else:
+            code = code_by_name.get(country)
+            if code:
+                flag = chr(ord(code[0]) + 127397) + chr(ord(code[1]) + 127397)
+                group_name = f"{flag} {country}"
+            else:
+                group_name = country
+        groups.append({
+            "name": group_name,
+            "type": "url-test",
+            "url": "http://www.gstatic.com/generate_204",
+            "interval": 300,
+            "tolerance": 50,
+            "proxies": names,
+        })
+
+    data = {
+        "proxies": proxies,
+        "proxy-groups": groups,
+        "rules": ["MATCH,Обычный"],
+    }
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        yaml.dump(data, f, allow_unicode=True, sort_keys=False, width=1000)
+    dupes = sum(v - 1 for v in seen_names.values() if v > 1)
+    print(f"💾 {out_path}: {len(proxies)} прокси, {len(country_map)} стран (пропущено {skipped}, дубликатов {dupes})")
+
+
+def xray_vless(uri):
+    p = urlparse(uri)
+    q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
+    cfg = {"protocol": "vless",
+           "settings": {"vnext": [{"address": p.hostname, "port": p.port or 443,
+                                    "users": [{"id": p.username, "encryption": q.get("encryption", "none"),
+                                               "flow": q.get("flow", "")}]}]},
+           "streamSettings": {"network": q.get("type", "tcp"), "security": q.get("security", "none")}}
+    if q.get("security") == "reality":
+        cfg["streamSettings"]["realitySettings"] = {
+            "serverName": q.get("sni", ""), "publicKey": q.get("pbk", ""),
+            "shortId": q.get("sid", ""), "fingerprint": q.get("fp", "chrome")}
+    if q.get("security") == "tls":
+        cfg["streamSettings"]["tlsSettings"] = {"serverName": q.get("sni", p.hostname),
+                                                 "allowInsecure": q.get("allowInsecure", "0") == "1"}
+    return cfg
+
+
+def xray_vmess(uri):
+    raw = base64.b64decode(uri[8:] + '=' * (-len(uri[8:]) % 4)).decode()
+    v = json.loads(raw)
+    ss = {"network": v.get("net", "tcp"), "security": v.get("tls", "") or "none"}
+    if v.get("tls") == "tls":
+        ss["tlsSettings"] = {"serverName": v.get("sni") or v.get("host", "")}
+    if v.get("net") == "ws":
+        ss["wsSettings"] = {"path": v.get("path", "/"), "headers": {"Host": v.get("host", "")}}
+    return {"protocol": "vmess",
+            "settings": {"vnext": [{"address": v.get("add"), "port": int(v.get("port", 443)),
+                                     "users": [{"id": v.get("id"), "alterId": int(v.get("aid", 0)),
+                                                "security": v.get("scy", "auto")}return [], f"Не распознан формат ({len(text)} байт)", "unknown"
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt < retries:
+                time.sleep(5)
+                continue
+            return [], f"HTTP {e.code} {e.reason}", f"http{e.code}"
+        except urllib.error.URLError as e:
+            if attempt < retries and 'timed out' in str(e).lower():
+                time.sleep(3)
+                continue
+            return [], f"Сеть: {e.reason}", "network"
+        except Exception as e:
+            return [], f"{type(e).__name__}: {e}", "error"
+    return [], "Все попытки провалились", "failed"
+
+
+def load_flags_batch(hosts):
+    ips = [h for h in hosts if h and h.count('.') == 3 and all(p.isdigit() for p in h.split('.'))]
+    if not ips:
+        return
+    print(f"\n🌍 Определение стран для {len(ips)} IP...")
+    for i in range(0, len(ips), 100):
+        chunk = ips[i:i+100]
+        try:
+            payload = json.dumps([{"query": ip} for ip in chunk]).encode()
+            req = urllib.request.Request("http://ip-api.com/batch?fields=countryCode,query",
+                data=payload, headers={'Content-Type': 'application/json'})
+            resp = json.loads(urllib.request.urlopen(req, timeout=10).read())
+            for item in resp:
+                _FLAGS[item['query']] = item.get('countryCode', '')
+        except Exception as e:
+            print(f"   ⚠️ Батч {i//100}: {e}")
+        time.sleep(1.5)
+
+
+def get_flag_and_name(host):
+    code = _FLAGS.get(host, '')
+    if not code or len(code) != 2:
+        return "🌐", "Unknown"
+    return chr(ord(code[0]) + 127397) + chr(ord(code[1]) + 127397), COUNTRY_NAMES.get(code, code)
+
+
+def format_line(cfg, ping):
+    flag, country = get_flag_and_name(cfg['host'])
+    pstr = f"{ping}ms" if ping and ping > 0 else "?ms"
+    new_name = f"cool [{cfg['label']}] {flag} {country} |{pstr}|"
+    raw = cfg['raw']
+    if '#' in raw:
+        base, _ = raw.rsplit('#', 1)
+        return f"{base}#{quote(new_name)}"
+    return f"{raw}#{quote(new_name)}"
+
+
+def to_clash_proxy(cfg, flag, country, ping):
+    uri = cfg['raw'].strip()
+    name = f"cool [{cfg['label']}] {flag} {country} |{ping}ms|"
+    try:
+        if uri.startswith('vless://'):
+            p = urlparse(uri)
+            q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
+            proxy = {
+                "name": name, "type": "vless", "server": p.hostname,
+                "port": p.port or 443, "uuid": p.username, "udp": True,
+                "tls": q.get("security") in ("tls", "reality"),
+                "network": q.get("type", "tcp"),
+                "skip-cert-verify": q.get("allowInsecure", "0") == "1",
+            }
+            if q.get("flow"):
+                proxy["flow"] = q["flow"]
+            if q.get("security") == "reality":
+                proxy["reality-opts"] = {"public-key": q.get("pbk", ""), "short-id": q.get("sid", "")}
+                proxy["servername"] = q.get("sni", "")
+                proxy["client-fingerprint"] = q.get("fp", "chrome")
+            elif q.get("security") == "tls":
+                proxy["servername"] = q.get("sni", p.hostname)
+            if q.get("type") == "ws":
+                proxy["ws-opts"] = {"path": q.get("path", "/"), "headers": {"Host": q.get("host", "")}}
+            elif q.get("type") == "grpc":
+                proxy["grpc-opts"] = {"grpc-service-name": q.get("serviceName", "")}
+            return proxy
+
+        elif uri.startswith('vmess://'):
+            raw = base64.b64decode(uri[8:] + '=' * (-len(uri[8:]) % 4)).decode('utf-8')
+            v = json.loads(raw)
+            proxy = {
+                "name": name, "type": "vmess", "server": v.get("add"),
+                "port": int(v.get("port", 443)), "uuid": v.get("id"),
+                "alterId": int(v.get("aid", 0)), "cipher": v.get("scy", "auto"),
+                "udp": True, "tls": v.get("tls") == "tls",
+                "network": v.get("net", "tcp"),
+            }
+            if v.get("sni"):
+                proxy["servername"] = v["sni"]
+            if v.get("net") == "ws":
+                proxy["ws-opts"] = {"path": v.get("path", "/"), "headers": {"Host": v.get("host", "")}}
+            return proxy
+
+        elif uri.startswith('trojan://'):
+            p = urlparse(uri)
+            q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
+            return {
+                "name": name, "type": "trojan", "server": p.hostname,
+                "port": p.port or 443, "password": p.username,
+                "sni": q.get("sni", p.hostname), "udp": True,
+                "skip-cert-verify": False,
+            }
+
+        elif uri.startswith('ss://'):
+            raw = uri[5:]
+            if "#" in raw:
+                raw = raw.split("#")[0]
+            if "@" in raw:
+                userinfo, hostport = raw.rsplit("@", 1)
+                try:
+                    userinfo = base64.b64decode(userinfo + '=' * (-len(userinfo) % 4)).decode()
+                except Exception:
+                    pass
+            else:
+                decoded = base64.b64decode(raw + '=' * (-len(raw) % 4)).decode()
+                userinfo, hostport = decoded.rsplit("@", 1)
+            method, password = userinfo.split(":", 1)
+            host, port = hostport.split(":")
+            return {
+                "name": name, "type": "ss", "server": host,
+                "port": int(port.split("/")[0]), "cipher": method, "password": password, "udp": True,
+            }
+
+        elif uri.startswith(('hysteria2://', 'hy2://')):
+            p = urlparse(uri)
+            q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
+            return {
+                "name": name, "type": "hysteria2", "server": p.hostname,
+                "port": p.port or 443, "password": p.username,
+                "sni": q.get("sni", p.hostname),
+                "skip-cert-verify": q.get("insecure", "0") == "1",
+            }
+    except Exception:
+        return None
+    return None
+
+
+def build_clash_yaml(working_list, out_path):
+    proxies = []
+    skipped = 0
+    seen_names = {}
     for cfg, ping in working_list:
         flag, country = get_flag_and_name(cfg['host'])
         p = to_clash_proxy(cfg, flag, country, ping)
