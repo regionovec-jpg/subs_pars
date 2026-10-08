@@ -389,6 +389,24 @@ def build_clash_yaml(working_list, out_path):
           f"без RU {len(non_ru_names)} (пропущено {skipped}, дубликатов {dupes})")
 
 
+def save_stats(working_list, out_path):
+    countries = {}
+    for cfg, _ in working_list:
+        _, country = get_flag_and_name(cfg['host'])
+        countries[country] = countries.get(country, 0) + 1
+    top_countries = sorted(countries.items(), key=lambda x: -x[1])[:10]
+    stats = {
+        "total": len(working_list),
+        "countries": len(countries),
+        "no_ru": len([1 for c, _ in working_list if get_flag_and_name(c['host'])[1] != "Russia"]),
+        "top": [{"country": c, "count": n} for c, n in top_countries],
+        "updated": int(time.time()),
+    }
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(stats, f, ensure_ascii=False, indent=2)
+    print(f"💾 {out_path}: {stats['total']} серверов, {stats['countries']} стран, без RU {stats['no_ru']}")
+
+
 def xray_vless(uri):
     p = urlparse(uri)
     q = dict(x.split('=', 1) for x in p.query.split('&') if '=' in x)
@@ -667,6 +685,9 @@ def run_subscription(sources, remote_name, label):
 
     yaml_name = remote_name.replace(".txt", ".yaml")
     build_clash_yaml(working, yaml_name)
+
+    stats_name = remote_name.replace(".txt", "_stats.json")
+    save_stats(working, stats_name)
 
     print(f"⏱️  Всего: {time.time() - t0:.1f}с")
 
