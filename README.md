@@ -1,5 +1,7 @@
 ![Auto Update](https://github.com/regionovec-jpg/subs_pars/actions/workflows/update.yml/badge.svg)
 
+![Last Commit](https://img.shields.io/github/last-commit/regionovec-jpg/subs_pars)
+
 # subs_pars
 
 Парсер подписок для v2rayNG / Hiddify / NekoBox / FlClash
