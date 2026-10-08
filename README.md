@@ -3,8 +3,7 @@
 ![BL Servers](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_bl_stats.json&query=$.total&label=BL%20Servers&color=red)
 ![WL Servers](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_wl_stats.json&query=$.total&label=WL%20Servers&color=green)
 ![BL Countries](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_bl_stats.json&query=$.countries&label=BL%20Countries&color=blue)
-![BL No-RU](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_bl_stats.json&query=$.no_ru&label=BL%20no-RU&color=orange)
-![WL No-RU](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_wl_stats.json&query=$.no_ru&label=WL%20no-RU&color=yellow)
+![WL Countries](https://img.shields.io/badge/dynamic/json?url=https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_wl_stats.json&query=$.countries&label=WL%20Countries&color=purple)
 
 # subs_pars
 
