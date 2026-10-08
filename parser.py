@@ -398,13 +398,12 @@ def save_stats(working_list, out_path):
     stats = {
         "total": len(working_list),
         "countries": len(countries),
-        "no_ru": len([1 for c, _ in working_list if get_flag_and_name(c['host'])[1] != "Russia"]),
         "top": [{"country": c, "count": n} for c, n in top_countries],
         "updated": int(time.time()),
     }
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(stats, f, ensure_ascii=False, indent=2)
-    print(f"💾 {out_path}: {stats['total']} серверов, {stats['countries']} стран, без RU {stats['no_ru']}")
+    print(f"💾 {out_path}: {stats['total']} серверов, {stats['countries']} стран")
 
 
 def xray_vless(uri):
