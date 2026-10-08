@@ -217,7 +217,7 @@ def get_flag_and_name(host):
 def format_line(cfg, ping):
     flag, country = get_flag_and_name(cfg['host'])
     pstr = f"{ping}ms" if ping and ping > 0 else "?ms"
-    new_name = f"cool [{cfg['label']}] {flag} {country} |{pstr}|"
+    new_name = f"cool [{cfg['label']}] {flag} |{pstr}|"
     raw = cfg['raw']
     if '#' in raw:
         base, _ = raw.rsplit('#', 1)
@@ -227,7 +227,7 @@ def format_line(cfg, ping):
 
 def to_clash_proxy(cfg, flag, country, ping):
     uri = cfg['raw'].strip()
-    name = f"cool [{cfg['label']}] {flag} {country} |{ping}ms|"
+    name = f"cool [{cfg['label']}] {flag} |{ping}ms|"
     try:
         if uri.startswith('vless://'):
             p = urlparse(uri)
@@ -318,6 +318,7 @@ def build_clash_yaml(working_list, out_path):
     skipped = 0
     seen_names = {}
     country_map = {}
+    non_ru_names = []
 
     for cfg, ping in working_list:
         flag, country = get_flag_and_name(cfg['host'])
@@ -333,6 +334,8 @@ def build_clash_yaml(working_list, out_path):
             seen_names[base_name] = 1
         proxies.append(p)
         country_map.setdefault(country, []).append(p["name"])
+        if country != "Russia":
+            non_ru_names.append(p["name"])
 
     if not proxies:
         print(f"⚠️ {out_path}: нет прокси")
@@ -342,9 +345,16 @@ def build_clash_yaml(working_list, out_path):
     code_by_name = {v: k for k, v in COUNTRY_NAMES.items()}
 
     groups = [
-        {"name": "Обычный", "type": "select", "proxies": ["Авто"] + all_names},
-        {"name": "Авто", "type": "url-test", "url": "http://www.gstatic.com/generate_204",
-         "interval": 300, "tolerance": 50, "proxies": all_names},
+        {"name": "Обычный", "type": "select",
+         "proxies": ["Авто", "Авто (без RU)"] + all_names},
+        {"name": "Авто", "type": "url-test",
+         "url": "http://www.gstatic.com/generate_204",
+         "interval": 300, "tolerance": 50,
+         "proxies": all_names},
+        {"name": "Авто (без RU)", "type": "url-test",
+         "url": "http://www.gstatic.com/generate_204",
+         "interval": 300, "tolerance": 50,
+         "proxies": non_ru_names if non_ru_names else all_names},
     ]
 
     for country in sorted(country_map.keys()):
@@ -362,8 +372,7 @@ def build_clash_yaml(working_list, out_path):
             "name": group_name,
             "type": "url-test",
             "url": "http://www.gstatic.com/generate_204",
-            "interval": 300,
-            "tolerance": 50,
+            "interval": 300, "tolerance": 50,
             "proxies": names,
         })
 
@@ -376,7 +385,8 @@ def build_clash_yaml(working_list, out_path):
     with open(out_path, "w", encoding="utf-8") as f:
         yaml.dump(data, f, allow_unicode=True, sort_keys=False, width=1000)
     dupes = sum(v - 1 for v in seen_names.values() if v > 1)
-    print(f"💾 {out_path}: {len(proxies)} прокси, {len(country_map)} стран (пропущено {skipped}, дубликатов {dupes})")
+    print(f"💾 {out_path}: {len(proxies)} прокси, {len(country_map)} стран, "
+          f"без RU {len(non_ru_names)} (пропущено {skipped}, дубликатов {dupes})")
 
 
 def xray_vless(uri):
