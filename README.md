@@ -11,3 +11,7 @@
 Чёрные:  https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_bl.txt
 
 Белые:   https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_wl.txt
+
+CLASH чёрный: https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_bl.yaml
+
+CLASH белый:  https://raw.githubusercontent.com/regionovec-jpg/subs_pars/refs/heads/main/subs_wl.yaml
