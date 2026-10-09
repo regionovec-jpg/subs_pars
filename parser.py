@@ -237,6 +237,18 @@ def format_line(cfg, ping):
     return f"{raw}#{quote(new_name)}"
 
 
+def add_metadata(lines, title, update_hours=4, support_url=None, announce=None):
+    meta = []
+    meta.append(f"#profile-title: {title}")
+    meta.append(f"#profile-update-interval: {update_hours}")
+    if support_url:
+        meta.append(f"#support-url: {support_url}")
+    if announce:
+        meta.append(f"#announce: {announce}")
+    meta.append("")
+    return meta + lines
+
+
 def to_clash_proxy(cfg, flag, country, ping):
     uri = cfg['raw'].strip()
     name = f"cool [{cfg['label']}] {flag} |{ping}ms|"
@@ -696,9 +708,24 @@ def run_subscription(sources, remote_name, label):
     random.shuffle(working)
     output = [format_line(c, p) for c, p in working]
 
+    if "bl" in remote_name.lower():
+        title = "CoolSubs — Black"
+    else:
+        title = "CoolSubs — White"
+
+    announce = "это кароче ну подписка кароче ну так кароче подписка кароче"
+
+    output = add_metadata(
+        output,
+        title,
+        update_hours=4,
+        support_url="https://t.me/coolTezt",
+        announce=announce,
+    )
+
     with open(remote_name, "w", encoding="utf-8") as f:
         f.write("\n".join(output))
-    print(f"💾 {remote_name}: {len(output)} серверов (TXT)")
+    print(f"💾 {remote_name}: {len(output)} строк (с метаданными)")
 
     yaml_name = remote_name.replace(".txt", ".yaml")
     build_clash_yaml(working, yaml_name)
@@ -711,7 +738,7 @@ def run_subscription(sources, remote_name, label):
 
 if __name__ == "__main__":
     os.makedirs(TMP_DIR, exist_ok=True)
-    print("🚀 Запуск парсера с Xray-проверкой...")
+    print("🚀 Запуск парсера CoolSubs с Xray-проверкой...")
     run_subscription(BLACK_SOURCES, "subs_bl.txt", "⚫ ЧЁРНАЯ")
     run_subscription(WHITE_SOURCES, "subs_wl.txt", "⚪ БЕЛАЯ")
     print("\n✅ Готово!")
