@@ -719,7 +719,7 @@ def run_subscription(sources, remote_name, label):
         output,
         title,
         update_hours=4,
-        support_url="https://t.me/coolTezt",
+        support_url="https://github.com/vessel-web/subs_pars"
         announce=announce,
     )
 
