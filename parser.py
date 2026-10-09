@@ -719,13 +719,13 @@ def run_subscription(sources, remote_name, label):
         output,
         title,
         update_hours=4,
-        support_url="https://github.com/vessel-web/subs_pars"
+        support_url="https://github.com/vessel-web/subs_pars",
         announce=announce,
     )
 
     with open(remote_name, "w", encoding="utf-8") as f:
         f.write("\n".join(output))
-    print(f"💾 {remote_name}: {len(output)} строк (с метаданными)")
+    print(f"💾 {remote_name}: {len(output)} серверов (TXT)")
 
     yaml_name = remote_name.replace(".txt", ".yaml")
     build_clash_yaml(working, yaml_name)
@@ -738,7 +738,7 @@ def run_subscription(sources, remote_name, label):
 
 if __name__ == "__main__":
     os.makedirs(TMP_DIR, exist_ok=True)
-    print("🚀 Запуск парсера CoolSubs с Xray-проверкой...")
+    print("🚀 Запуск парсера с Xray-проверкой...")
     run_subscription(BLACK_SOURCES, "subs_bl.txt", "⚫ ЧЁРНАЯ")
     run_subscription(WHITE_SOURCES, "subs_wl.txt", "⚪ БЕЛАЯ")
     print("\n✅ Готово!")
