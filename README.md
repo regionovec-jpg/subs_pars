@@ -7,7 +7,7 @@
 
 # subs_pars
 
-Парсер подписок для v2rayNG / Hiddify / NekoBox / FlClash
+Парсер подписок для v2rayNG / Hiddify / NekoBox / FlClash / --Happ-- / --Incy-- 
 
 Собирает конфиги с кучи источников, проверяет их и заливает сюда же.
 
