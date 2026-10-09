@@ -9,6 +9,7 @@ import ssl
 import os
 import re
 import time
+import random
 import subprocess
 import concurrent.futures
 import requests
@@ -692,7 +693,7 @@ def run_subscription(sources, remote_name, label):
         print("⚠️ Ничего не прошло проверку")
         return
 
-    working.sort(key=lambda x: x[1])
+    random.shuffle(working)
     output = [format_line(c, p) for c, p in working]
 
     with open(remote_name, "w", encoding="utf-8") as f:
