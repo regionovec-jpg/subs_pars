@@ -226,10 +226,9 @@ def get_flag_and_name(host):
     return chr(ord(code[0]) + 127397) + chr(ord(code[1]) + 127397), COUNTRY_NAMES.get(code, code)
 
 
-def format_line(cfg, ping):
+def format_line(cfg, ping, idx=0):
     flag, country = get_flag_and_name(cfg['host'])
-    pstr = f"{ping}ms" if ping and ping > 0 else "?ms"
-    new_name = f"cool [{cfg['label']}] {flag} |{pstr}|"
+    new_name = f"cool [{cfg['label']}] {flag} |#{idx}|"
     raw = cfg['raw']
     if '#' in raw:
         base, _ = raw.rsplit('#', 1)
@@ -249,9 +248,9 @@ def add_metadata(lines, title, update_hours=4, support_url=None, announce=None):
     return meta + lines
 
 
-def to_clash_proxy(cfg, flag, country, ping):
+def to_clash_proxy(cfg, flag, country, idx):
     uri = cfg['raw'].strip()
-    name = f"cool [{cfg['label']}] {flag} |{ping}ms|"
+    name = f"cool [{cfg['label']}] {flag} |#{idx}|"
     try:
         if uri.startswith('vless://'):
             p = urlparse(uri)
@@ -344,9 +343,9 @@ def build_clash_yaml(working_list, out_path):
     country_map = {}
     non_ru_names = []
 
-    for cfg, ping in working_list:
+    for idx, (cfg, ping) in enumerate(working_list, 1):
         flag, country = get_flag_and_name(cfg['host'])
-        p = to_clash_proxy(cfg, flag, country, ping)
+        p = to_clash_proxy(cfg, flag, country, idx)
         if not p:
             skipped += 1
             continue
@@ -706,7 +705,7 @@ def run_subscription(sources, remote_name, label):
         return
 
     random.shuffle(working)
-    output = [format_line(c, p) for c, p in working]
+    output = [format_line(c, p, i + 1) for i, (c, p) in enumerate(working)]
 
     if "bl" in remote_name.lower():
         title = "CoolSubs — Black"
