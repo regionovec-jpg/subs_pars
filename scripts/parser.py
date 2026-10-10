@@ -91,7 +91,7 @@ COUNTRY_NAMES = {
 XRAY_BIN = os.path.expanduser("~/xray/xray")
 TMP_DIR = "/tmp/xray_tmp"
 SOCKS_BASE_PORT = 20000
-TEST_URL = "https://www.gstatic.com/generate_204"
+TEST_URL = "http://cp.cloudflare.com/generate_204"
 PING_TIMEOUT = 5
 XRAY_WORKERS = 20
 
@@ -636,7 +636,7 @@ def check_via_xray(args):
             os.remove(cfg_path)
         except Exception:
             pass
-        return (cfg, ping) if resp.status == 204 else (None, None)
+        return (cfg, ping) if resp.status in (200, 204) else (None, None)
     except Exception:
         proc.kill()
         try:
