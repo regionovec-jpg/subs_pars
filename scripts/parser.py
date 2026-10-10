@@ -91,7 +91,7 @@ COUNTRY_NAMES = {
 XRAY_BIN = os.path.expanduser("~/xray/xray")
 TMP_DIR = "/tmp/xray_tmp"
 SOCKS_BASE_PORT = 20000
-TEST_URL = "http://cp.cloudflare.com"
+TEST_URL = "http://detectportal.firefox.com/success.txt"
 PING_TIMEOUT = 5
 XRAY_WORKERS = 20
 
@@ -651,7 +651,7 @@ def run_subscription(sources, remote_name, label):
     t0 = time.time()
 
     print(f"\n═══ {label} → {remote_name} ═══")
-    print(f"⚙️  Xray-потоков: {XRAY_WORKERS} | Пинг-таймаут: {PING_TIMEOUT}s")
+    print(f"⚙️  Xray-потоков: {XRAY_WORKERS} | Пинг-таймаут: {PING_TIMEOUT}s | URL: {TEST_URL}")
 
     all_configs = []
     type_counter = Counter()
